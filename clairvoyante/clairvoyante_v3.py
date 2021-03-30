@@ -39,21 +39,27 @@ class Clairvoyante(object):
         self.predictBaseRTVal = None; self.predictZygosityRTVal = None; self.predictVarTypeRTVal = None; self.predictIndelLengthRTVal = None
         # Tensorflow computations, set of Operations and Tensors (units of data flowing between operations)
         self.g = tf.Graph()
+        # Build Clairvoyante network
         self._buildGraph()
         # Session to run graph in, Operations executed, Tensor objects evaluated
         self.session = tf.Session(graph = self.g, config=tf.ConfigProto(intra_op_parallelism_threads=param.NUM_THREADS))
 
     def _buildGraph(self):
+        # Function that builds the Clairvoyante network as a graph
         with self.g.as_default():
+            # PH = placeholder
+            # input placeholder
             XPH = tf.placeholder(tf.float32, [None, self.inputShape[0], self.inputShape[1], self.inputShape[2]], name='XPH')
             self.XPH = XPH
 
+            # output placeholder
             YPH = tf.placeholder(tf.float32, [None, self.outputShape1[0] + self.outputShape2[0] + self.outputShape3[0] + self.outputShape4[0]], name='YPH')
             self.YPH = YPH
 
             learningRatePH = tf.placeholder(tf.float32, shape=[], name='learningRatePH')
             self.learningRatePH = learningRatePH
 
+            # Argument for selu dropout function
             phasePH = tf.placeholder(tf.bool, shape=[], name='phasePH')
             self.phasePH = phasePH
 
@@ -69,6 +75,7 @@ class Clairvoyante(object):
             conv1 = tf.layers.conv2d(inputs=XPH,
                                      filters=self.numFeature1,
                                      kernel_size=self.kernelSize1,
+                                     # He initializer from Delving Deep into Rectifiers
                                      kernel_initializer = tf.contrib.layers.variance_scaling_initializer(factor=2.0, mode='FAN_IN', uniform=False),
                                      padding="same",
                                      activation=selu.selu,
@@ -84,6 +91,7 @@ class Clairvoyante(object):
             conv2 = tf.layers.conv2d(inputs=pool1,
                                      filters=self.numFeature2,
                                      kernel_size=self.kernelSize2,
+                                     # He initializer from Delving Deep into Rectifiers
                                      kernel_initializer = tf.contrib.layers.variance_scaling_initializer(factor=2.0, mode='FAN_IN', uniform=False),
                                      padding="same",
                                      activation=selu.selu,
@@ -99,6 +107,7 @@ class Clairvoyante(object):
             conv3 = tf.layers.conv2d(inputs=pool2,
                                      filters=self.numFeature3,
                                      kernel_size=self.kernelSize3,
+                                     # He initializer from Delving Deep into Rectifiers
                                      kernel_initializer = tf.contrib.layers.variance_scaling_initializer(factor=2.0, mode='FAN_IN', uniform=False),
                                      padding="same",
                                      activation=selu.selu,
@@ -111,6 +120,7 @@ class Clairvoyante(object):
                                             name='pool3')
             self.pool3 = pool3
 
+            # Flattening for fully connected layers
             flat_size = ( self.inputShape[0] - (self.pollSize1[0] - 1) - (self.pollSize2[0] - 1) - (self.pollSize3[0] - 1))
             flat_size *= ( self.inputShape[1] - (self.pollSize1[1] - 1) - (self.pollSize2[1] - 1) - (self.pollSize3[1] - 1))
             flat_size *= self.numFeature3
@@ -118,6 +128,7 @@ class Clairvoyante(object):
 
             fc4 = tf.layers.dense(inputs=conv3_flat,
                                  units=self.hiddenLayerUnits4,
+                                 # He initializer from Delving Deep into Rectifiers
                                  kernel_initializer = tf.contrib.layers.variance_scaling_initializer(factor=2.0, mode='FAN_IN', uniform=False),
                                  activation=selu.selu,
                                  name='fc4')
@@ -128,6 +139,7 @@ class Clairvoyante(object):
 
             fc5 = tf.layers.dense(inputs=dropout4,
                                  units=self.hiddenLayerUnits5,
+                                 # He initializer from Delving Deep into Rectifiers
                                  kernel_initializer = tf.contrib.layers.variance_scaling_initializer(factor=2.0, mode='FAN_IN', uniform=False),
                                  activation=selu.selu,
                                  name='fc5')
@@ -137,21 +149,27 @@ class Clairvoyante(object):
             self.dropout5 = dropout5
 
             epsilon = tf.constant(value=1e-10)
+            # Alternate base prediction **made from output of FC4 layer**
             YBaseChangeSigmoid = tf.layers.dense(inputs=dropout4, units=self.outputShape1[0], activation=tf.nn.sigmoid, name='YBaseChangeSigmoid')
             self.YBaseChangeSigmoid = YBaseChangeSigmoid
+            # Zygosity prediction
             YZygosityFC = tf.layers.dense(inputs=dropout5, units=self.outputShape2[0], activation=selu.selu, name='YZygosityFC')
+            # I think epsilon is getting added to the YZygosityFC matrix???
             YZygosityLogits = tf.add(YZygosityFC, epsilon, name='YZygosityLogits')
             YZygositySoftmax = tf.nn.softmax(YZygosityLogits, name='YZygositySoftmax')
             self.YZygositySoftmax = YZygositySoftmax
+            # Variant type prediction
             YVarTypeFC = tf.layers.dense(inputs=dropout5, units=self.outputShape3[0], activation=selu.selu, name='YVarTypeFC')
             YVarTypeLogits = tf.add(YVarTypeFC, epsilon, name='YVarTypeLogits')
             YVarTypeSoftmax = tf.nn.softmax(YVarTypeLogits, name='YVarTypeSoftmax')
             self.YVarTypeSoftmax = YVarTypeSoftmax
+            # Indel length prediction
             YIndelLengthFC = tf.layers.dense(inputs=dropout5, units=self.outputShape4[0], activation=selu.selu, name='YIndelLengthFC')
             YIndelLengthLogits = tf.add(YIndelLengthFC, epsilon, name='YIndelLengthLogits')
             YIndelLengthSoftmax = tf.nn.softmax(YIndelLengthLogits, name='YIndelLengthSoftmax')
             self.YIndelLengthSoftmax = YIndelLengthSoftmax
 
+            # Calculate overall loss by finding the squared sum of each error (see equation in publication)
             loss1 = tf.reduce_sum(tf.pow(YBaseChangeSigmoid - tf.slice(YPH,[0,0],[-1,self.outputShape1[0]], name='YBaseChangeGetTruth'), 2, name='YBaseChangeMSE'), name='YBaseChangeReduceSum')
             YZygosityCrossEntropy = tf.nn.log_softmax(YZygosityLogits, name='YZygosityLogSoftmax')\
                                     * -tf.slice(YPH, [0,self.outputShape1[0]], [-1,self.outputShape2[0]], name='YZygosityGetTruth')
@@ -186,7 +204,10 @@ class Clairvoyante(object):
             #    tf.summary.histogram(var.op.name, var)
             self.merged_summary_op = tf.summary.merge_all()
 
+            # Trained with Adam optimizer
             self.training_op = tf.train.AdamOptimizer(learning_rate=learningRatePH).minimize(loss)
+            # https://www.tensorflow.org/api_docs/python/tf/compat/v1/variables_initializer
+            # can be run after graph is launch to initialize all the variables
             self.init_op = tf.global_variables_initializer()
 
     def init(self):
