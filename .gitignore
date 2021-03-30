@@ -105,3 +105,7 @@ tmp
 
 # jupyter notebook checkpoint
 .ipynb_checkpoints
+
+# Katy additions
+get-pip.py
+trainedModels/
