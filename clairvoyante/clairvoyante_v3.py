@@ -14,18 +14,33 @@ class Clairvoyante(object):
                        dropoutRateFC4 = param.dropoutRateFC4, dropoutRateFC5 = param.dropoutRateFC5,
                        l2RegularizationLambda = param.l2RegularizationLambda, l2RegularizationLambdaDecay = param.l2RegularizationLambdaDecay):
         self.inputShape = inputShape
+        # Shape of the 4 outputs:
+        # Output1: alternate base at SNP, or reference base otherwise (all 0s for indels) [A, C, G, T]
+        # Output2: zygosity of variant [homozygote, heterozygote]
+        # Output3: variant type [ref, SNP, insertion, deletion]
+        # Output4: length of indel in bp [0, 1, 2, 3, 4, >4]
         self.outputShape1 = outputShape1; self.outputShape2 = outputShape2; self.outputShape3 = outputShape3; self.outputShape4 = outputShape4
+        # height and width of 2D convolution windows in each layer
         self.kernelSize1 = kernelSize1; self.kernelSize2 = kernelSize2; self.kernelSize3 = kernelSize3
+        # window size to take max from in each pooling layer
         self.pollSize1 = pollSize1; self.pollSize2 = pollSize2; self.pollSize3 = pollSize3
+        # number of filters for conv layers (output size)
         self.numFeature1 = numFeature1; self.numFeature2 = numFeature2; self.numFeature3 = numFeature3
+        # number of nodes in each of the hidden layers
         self.hiddenLayerUnits4 = hiddenLayerUnits4; self.hiddenLayerUnits5 = hiddenLayerUnits5
+        # learning rate and decay for training network
         self.learningRateVal = initialLearningRate; self.learningRateDecay = learningRateDecay
+        # Dropout rate for each fully connected layer
         self.dropoutRateFC4Val = dropoutRateFC4; self.dropoutRateFC5Val = dropoutRateFC5
+        # L2 regularization settings
         self.l2RegularizationLambdaVal = l2RegularizationLambda; self.l2RegularizationLambdaDecay = l2RegularizationLambdaDecay
+        # Not sure what RTVal is
         self.trainLossRTVal = None; self.trainSummaryRTVal = None; self.getLossLossRTVal = None
         self.predictBaseRTVal = None; self.predictZygosityRTVal = None; self.predictVarTypeRTVal = None; self.predictIndelLengthRTVal = None
+        # Tensorflow computations, set of Operations and Tensors (units of data flowing between operations)
         self.g = tf.Graph()
         self._buildGraph()
+        # Session to run graph in, Operations executed, Tensor objects evaluated
         self.session = tf.Session(graph = self.g, config=tf.ConfigProto(intra_op_parallelism_threads=param.NUM_THREADS))
 
     def _buildGraph(self):
@@ -281,4 +296,3 @@ class Clairvoyante(object):
 
     def __del__(self):
         self.session.close()
-
