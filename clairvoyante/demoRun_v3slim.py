@@ -22,6 +22,12 @@ def Run(args):
 
 def TrainAll(args, m):
     logging.info("Loading the training dataset ...")
+    # tensor_can_chr21 = training data
+    # var_chr21 = validation data
+    # total is number of training samples
+    # XArrayCompressed is the formatted training data
+    # YArraYCompressed is the formatted validation data
+    # posArrayCompressed is ?
     total, XArrayCompressed, YArrayCompressed, posArrayCompressed = \
     utils.GetTrainingArray("../training/tensor_can_chr21",
                            "../training/var_chr21",
@@ -39,6 +45,7 @@ def TrainAll(args, m):
     # paramaters imported from param.py config file
     trainBatchSize = param.trainBatchSize
     validationLosts = []
+    #Initialize learning rate
     logging.info("Start at learning rate: %.2e" % m.setLearningRate(args.learning_rate))
     c = 0; maxLearningRateSwitch = param.maxLearningRateSwitch
     epochStart = time.time()
@@ -76,6 +83,7 @@ def TrainAll(args, m):
                 maxLearningRateSwitch -= 1
                 if maxLearningRateSwitch == 0:
                   break
+                  # Update learning rate with decay factor
                 logging.info("New learning rate: %.2e" % m.setLearningRate())
                 c = 0
             epochStart = time.time()
@@ -95,7 +103,10 @@ def TrainAll(args, m):
     predictBatchSize = param.predictBatchSize
     datasetPtr = 0
     XBatch, _, _ = utils.DecompressArray(XArrayCompressed, datasetPtr, predictBatchSize, total)
+    # initialize prediction arrays
+    # bases prediction, zygosity, variant types, lengths
     bases = []; zs = []; ts = []; ls = []
+    # make prediction on
     base, z, t, l = m.predict(XBatch)
     bases.append(base); zs.append(z); ts.append(t); ls.append(l)
     datasetPtr += predictBatchSize
